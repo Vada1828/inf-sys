@@ -1,7 +1,6 @@
 #!/bin/sh
 
 # Run migrations
-falsk db init
 flask db migrate -m "Auto migration"
 flask db upgrade
 
