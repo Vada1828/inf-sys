@@ -1,5 +1,3 @@
-
-
 FROM python:3.10-slim
 
 WORKDIR /app
@@ -11,4 +9,8 @@ COPY . .
 
 EXPOSE 5000
 
-CMD ["python", "app.py"]
+# Entrypoint script to run migrations then start app
+RUN echo '#!/bin/sh\nflask db migrate -m "Auto migration"\nflask db upgrade\nexec python app.py' > /app/entrypoint.sh
+RUN chmod +x /app/entrypoint.sh
+
+ENTRYPOINT ["./entrypoint.sh"]

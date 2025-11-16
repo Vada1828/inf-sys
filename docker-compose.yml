@@ -15,6 +15,7 @@ services:
       - SQLALCHEMY_DATABASE_URI=postgresql://vada:vada@db:5432/vada
     depends_on:
       - db
+    entrypoint: ["sh", "/app/entrypoint.sh"]
 
   db:
     image: postgres:13
