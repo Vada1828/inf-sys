@@ -1,0 +1,32 @@
+
+
+version: '3.8'
+
+services:
+  web:
+    build:
+      context: .
+    container_name: flask_app
+    ports:
+      - "5000:5000"
+    volumes:
+      - .:/app
+    environment:
+      - SQLALCHEMY_DATABASE_URI=postgresql://vada:vada@db:5432/vada
+    depends_on:
+      - db
+
+  db:
+    image: postgres:13
+    container_name: postgres_db
+    environment:
+      POSTGRES_USER: vada
+      POSTGRES_PASSWORD: vada
+      POSTGRES_DB: vada
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+volumes:
+  postgres_data:
