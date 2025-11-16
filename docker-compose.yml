@@ -9,8 +9,6 @@ services:
     container_name: flask_app
     ports:
       - "5000:5000"
-    volumes:
-      - .:/app
     environment:
       - SQLALCHEMY_DATABASE_URI=postgresql://vada:vada@db:5432/vada
     depends_on:
