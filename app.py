@@ -12,6 +12,8 @@ import tempfile
 import os
 from faker import Faker
 import random
+from flask import request
+from sqlalchemy import text
 
 def seed_database():
     fake = Faker()
@@ -208,7 +210,25 @@ def get_order_details():
         "phone_number": d.phone_number
     } for d in details])
 
+@app.route('/execute-sql', methods=['POST'])
+def execute_sql():
+    data = request.get_json()
+    sql_query = data.get('query')
+    
+    if not sql_query:
+        return jsonify({"error": "No SQL query provided"}), 400
 
+    try:
+        # Wrap raw SQL query string as text() object
+        stmt = text(sql_query)
+        result_proxy = db.session.execute(stmt)
+        result_set = result_proxy.fetchall()
+        keys = result_proxy.keys()
+        results = [dict(zip(keys, row)) for row in result_set]
+        return jsonify(results)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400
+    
 if __name__ == "__main__":
     with app.app_context():
         if Customer.query.count() == 0:
