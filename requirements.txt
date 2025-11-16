@@ -6,3 +6,4 @@ alembic
 sqlalchemy_schemadisplay 
 graphviz
 faker
+Flask-Cors

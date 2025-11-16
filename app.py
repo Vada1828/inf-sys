@@ -14,6 +14,7 @@ from faker import Faker
 import random
 from flask import request
 from sqlalchemy import text
+from flask_cors import CORS
 
 def seed_database():
     fake = Faker()
@@ -65,6 +66,7 @@ def seed_database():
 
 
 app = Flask(__name__)
+CORS(app)
 
 # Database configuration
 app.config['SQLALCHEMY_DATABASE_URI'] = 'postgresql://vada:vada@db:5432/vada'
@@ -234,3 +236,4 @@ if __name__ == "__main__":
         if Customer.query.count() == 0:
             seed_database()
     app.run(host="0.0.0.0", port=5000)
+    
