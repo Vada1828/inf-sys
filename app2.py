@@ -19,31 +19,31 @@ migrate = Migrate(app, db)
 # --------------------------
 class DimProduct(db.Model):
     __tablename__ = "dim_product"
-    product_key = db.Column(db.Integer, primary_key=True, autoincrement=True)
-    product_id = db.Column(db.Integer)
+    product_new_id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    # product_id = db.Column(db.Integer)
     product_name = db.Column(db.String(100))
     load_id = db.Column(db.Integer)
 
 class DimCustomer(db.Model):
     __tablename__ = "dim_customer"
-    customer_key = db.Column(db.Integer, primary_key=True, autoincrement=True)
-    customer_id = db.Column(db.Integer)
+    customer_new_id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    # customer_id = db.Column(db.Integer)
     customer_name = db.Column(db.String(100))
     load_id = db.Column(db.Integer)
 
 class DimManager(db.Model):
     __tablename__ = "dim_manager"
-    manager_key = db.Column(db.Integer, primary_key=True, autoincrement=True)
-    manager_id = db.Column(db.Integer)
+    manager_new_id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    # manager_id = db.Column(db.Integer)
     manager_name = db.Column(db.String(100))
     load_id = db.Column(db.Integer)
 
 class FactSales(db.Model):
     __tablename__ = "fact_sales"
     sale_id = db.Column(db.Integer, primary_key=True, autoincrement=True)
-    product_key = db.Column(db.Integer)
-    customer_key = db.Column(db.Integer)
-    manager_key = db.Column(db.Integer)
+    product_new_id = db.Column(db.Integer)
+    customer_new_id = db.Column(db.Integer)
+    manager_new_id = db.Column(db.Integer)
     quantity = db.Column(db.Integer)
     total_price = db.Column(db.Float)
     load_id = db.Column(db.Integer)
@@ -95,54 +95,69 @@ def etl_load():
     try:
         extract = requests.get("http://localhost:5000/etl/extract").json()["data"]
 
-        # получить новый load_id
-        load_id = db.session.execute(text("SELECT COALESCE(MAX(load_id),0)+1 FROM fact_sales")).scalar()
+        # получить новый номер загрузки
+        load_id = db.session.execute(text(
+            "SELECT COALESCE(MAX(load_id), 0) + 1 FROM fact_sales"
+        )).scalar()
 
-        # КЭШ для поиска существующих записей
+        # КЭШ существующих DIM строк: {name → new_id}
         existing_products = {
-            name: key for (key, name) in 
-            db.session.execute(text("SELECT product_key, product_name FROM dim_product")).all()
+            name: new_id for (new_id, name) in
+            db.session.execute(text("SELECT product_new_id, product_name FROM dim_product")).all()
         }
         existing_customers = {
-            name: key for (key, name) in 
-            db.session.execute(text("SELECT customer_key, customer_name FROM dim_customer")).all()
+            name: new_id for (new_id, name) in
+            db.session.execute(text("SELECT customer_new_id, customer_name FROM dim_customer")).all()
         }
         existing_managers = {
-            name: key for (key, name) in 
-            db.session.execute(text("SELECT manager_key, manager_name FROM dim_manager")).all()
+            name: new_id for (new_id, name) in
+            db.session.execute(text("SELECT manager_new_id, manager_name FROM dim_manager")).all()
         }
 
-        # === вставляем новые записи в DIM ===
+        # === DIM INSERT ===
         for r in extract:
+
             # PRODUCT
-            if r["product_name"] not in existing_products:
-                new_p = DimProduct(product_name=r["product_name"], load_id=load_id)
+            pname = r["product_name"]
+            if pname not in existing_products:
+                new_p = DimProduct(
+                    product_name=pname,
+                    load_id=load_id
+                )
                 db.session.add(new_p)
                 db.session.flush()
-                existing_products[r["product_name"]] = new_p.product_key
+                existing_products[pname] = new_p.product_new_id
 
             # CUSTOMER
-            if r["customer_name"] not in existing_customers:
-                new_c = DimCustomer(customer_name=r["customer_name"], load_id=load_id)
+            cname = r["customer_name"]
+            if cname not in existing_customers:
+                new_c = DimCustomer(
+                    customer_name=cname,
+                    load_id=load_id
+                )
                 db.session.add(new_c)
                 db.session.flush()
-                existing_customers[r["customer_name"]] = new_c.customer_key
+                existing_customers[cname] = new_c.customer_new_id
 
             # MANAGER
-            if r["manager_name"] not in existing_managers:
-                new_m = DimManager(manager_name=r["manager_name"], load_id=load_id)
+            mname = r["manager_name"]
+            if mname not in existing_managers:
+                new_m = DimManager(
+                    manager_name=mname,
+                    load_id=load_id
+                )
                 db.session.add(new_m)
                 db.session.flush()
-                existing_managers[r["manager_name"]] = new_m.manager_key
+                existing_managers[mname] = new_m.manager_new_id
 
         db.session.commit()
 
-        # === FACT SALES ===
+        # === FACT INSERT ===
         for r in extract:
             db.session.add(FactSales(
-                product_key=existing_products[r["product_name"]],
-                customer_key=existing_customers[r["customer_name"]],
-                manager_key=existing_managers[r["manager_name"]],
+                product_new_id=existing_products[r["product_name"]],
+                customer_new_id=existing_customers[r["customer_name"]],
+                manager_new_id=existing_managers[r["manager_name"]],
                 quantity=r["quantity"],
                 total_price=r["total"],
                 load_id=load_id
@@ -150,7 +165,25 @@ def etl_load():
 
         db.session.commit()
 
-        return jsonify({"message": "warehouse loaded", "load_id": load_id})
+        # === CLEAN FACT DUPLICATES ===
+        db.session.execute(text("""
+            DELETE FROM fact_sales a
+            USING fact_sales b
+            WHERE a.sale_id > b.sale_id
+            AND a.product_new_id = b.product_new_id
+            AND a.customer_new_id = b.customer_new_id
+            AND a.manager_new_id = b.manager_new_id
+            AND a.quantity = b.quantity
+            AND a.total_price = b.total_price;
+        """))
+
+        
+        db.session.commit()
+
+        return jsonify({
+            "message": "warehouse loaded",
+            "load_id": load_id
+        })
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
