@@ -117,6 +117,85 @@ document.getElementById("resetWH").onclick = async () => {
     showOutput(await res.json());
 };
 
+// ================= WH SQL RUNNER =================
+
+async function runWHQuery() {
+    const sql = document.getElementById("wh-sql").value.trim();
+    if (!sql) return alert("Запит порожній!");
+
+    const res = await fetch(`${WH_URL}/wh/sql`, {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({query: sql})
+    });
+
+    const data = await res.json();
+
+    if (data.error) {
+        document.getElementById("wh-result").innerHTML =
+            `<p style="color:red">Error: ${data.error}</p>`;
+        return;
+    }
+
+    renderTable("wh-result", data);
+}
+
+
+// ====== PRESET QUERIES (вставляют SQL в textarea и сразу запускают) ======
+
+function presetAvgOrder() {
+    document.getElementById("wh-sql").value =
+        `SELECT AVG(total_price) AS avg_order_price FROM fact_sales;`;
+    runWHQuery();
+}
+
+function presetTotalQty() {
+    document.getElementById("wh-sql").value =
+        `SELECT SUM(quantity) AS total_quantity_sold FROM fact_sales;`;
+    runWHQuery();
+}
+
+function presetTop5() {
+    document.getElementById("wh-sql").value =
+        `SELECT dp.product_name, SUM(fs.quantity) AS total_quantity
+         FROM fact_sales fs
+         JOIN dim_product dp ON fs.product_new_id = dp.product_new_id
+         GROUP BY dp.product_name
+         ORDER BY total_quantity DESC
+         LIMIT 5;`;
+    runWHQuery();
+}
+
+function presetCancelled() {
+    document.getElementById("wh-sql").value =
+        `SELECT COUNT(*) AS cancelled_orders
+         FROM fact_sales
+         WHERE total_price = 0;`;
+    runWHQuery();
+}
+
+function presetMaxOrder() {
+    document.getElementById("wh-sql").value =
+        `SELECT sale_id, total_price
+         FROM fact_sales
+         ORDER BY total_price DESC
+         LIMIT 1;`;
+    runWHQuery();
+}
+
+function presetExpensive() {
+    document.getElementById("wh-sql").value =
+        `SELECT COUNT(*) AS expensive_products
+         FROM dim_product
+         WHERE product_name IS NOT NULL
+         AND product_new_id IN (
+             SELECT product_new_id FROM fact_sales
+             WHERE total_price > 100
+         );`;
+    runWHQuery();
+}
+
+
 // Init
 loadTRTables();
 loadWHTables();

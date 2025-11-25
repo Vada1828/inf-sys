@@ -48,6 +48,31 @@
 
 <pre id="output" style="margin-top:20px; background:#f0f0f0; padding:10px;"></pre>
 
+<hr>
+
+<h2>Warehouse SQL Query Runner</h2>
+
+<!-- поле для SQL -->
+<textarea id="wh-sql" rows="6" cols="80"
+          placeholder="SELECT * FROM fact_sales LIMIT 20;"></textarea>
+<br>
+
+<!-- кнопка запуска -->
+<button onclick="runWHQuery()">Run Query</button>
+
+<br><br>
+
+<!-- кнопки генерации запросов -->
+<button class="btn" onclick="presetAvgOrder()">Середній чек</button>
+<button class="btn" onclick="presetTotalQty()">Загальна кількість проданих товарів</button>
+<button class="btn" onclick="presetTop5()">Топ 5 товарів за кількістю продажів</button>
+<button class="btn" onclick="presetMaxOrder()">Найдорожче замовлення</button>
+<button class="btn" onclick="presetExpensive()">Кількість дорогих товарів</button>
+
+<!-- место для вывода результата -->
+<div id="wh-result" style="margin-top:20px;"></div>
+
+
 <script src="script.js"></script>
 </body>
 </html>
