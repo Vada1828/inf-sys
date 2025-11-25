@@ -41,25 +41,29 @@ class DimManager(db.Model):
 class FactSales(db.Model):
     __tablename__ = "fact_sales"
     sale_id = db.Column(db.Integer, primary_key=True, autoincrement=True)
-    product_new_id = db.Column(db.Integer)
+
+    order_id = db.Column(db.Integer)
     customer_new_id = db.Column(db.Integer)
     manager_new_id = db.Column(db.Integer)
-    quantity = db.Column(db.Integer)
-    total_price = db.Column(db.Float)
+
+    quantity = db.Column(db.Integer)      # aggregated
+    total_price = db.Column(db.Float)     # aggregated
+    status = db.Column(db.String(50))
+
     load_id = db.Column(db.Integer)
+
 
 # --------------------------
 # ROUTES
 # --------------------------
 @app.route("/wh/tables")
 def wh_tables():
-    return jsonify(["dim_product","dim_customer","dim_manager","fact_sales"])
+    return jsonify(["dim_customer","dim_manager","fact_sales"])
 
 
 @app.route("/wh/rows/<t>")
 def wh_rows(t):
     valid = {
-        "dim_product": "dim_product",
         "dim_customer": "dim_customer",
         "dim_manager": "dim_manager",
         "fact_sales": "fact_sales"
@@ -101,10 +105,6 @@ def etl_load():
         )).scalar()
 
         # КЭШ существующих DIM строк: {name → new_id}
-        existing_products = {
-            name: new_id for (new_id, name) in
-            db.session.execute(text("SELECT product_new_id, product_name FROM dim_product")).all()
-        }
         existing_customers = {
             name: new_id for (new_id, name) in
             db.session.execute(text("SELECT customer_new_id, customer_name FROM dim_customer")).all()
@@ -116,17 +116,6 @@ def etl_load():
 
         # === DIM INSERT ===
         for r in extract:
-
-            # PRODUCT
-            pname = r["product_name"]
-            if pname not in existing_products:
-                new_p = DimProduct(
-                    product_name=pname,
-                    load_id=load_id
-                )
-                db.session.add(new_p)
-                db.session.flush()
-                existing_products[pname] = new_p.product_new_id
 
             # CUSTOMER
             cname = r["customer_name"]
@@ -152,30 +141,62 @@ def etl_load():
 
         db.session.commit()
 
-        # === FACT INSERT ===
+        # === FACT INSERT WITH ORDER-LEVEL AGGREGATION ===
         for r in extract:
+
+            order_id = r["order_id"]
+            new_status = r["status"]
+
+            # ищем последний факт по этому order_id
+            old = db.session.execute(text("""
+                SELECT sale_id, status, load_id
+                FROM fact_sales
+                WHERE order_id = :oid
+                ORDER BY load_id DESC
+                LIMIT 1
+            """), {"oid": order_id}).fetchone()
+
+            # если записи еще нет — просто добавляем первую версию
+            if old is None:
+                db.session.add(FactSales(
+                    order_id=order_id,
+                    customer_new_id=existing_customers[r["customer_name"]],
+                    manager_new_id=existing_managers[r["manager_name"]],
+                    quantity=r["quantity"],
+                    total_price=r["total"],
+                    status=new_status,
+                    load_id=load_id
+                ))
+                continue
+
+            old_status = old.status
+
+            # если статус не изменился — НОВОЙ версии не нужно
+            if old_status == new_status:
+                continue
+
+            # если статус изменился — создаем новую версию (новый load)
             db.session.add(FactSales(
-                product_new_id=existing_products[r["product_name"]],
+                order_id=order_id,
                 customer_new_id=existing_customers[r["customer_name"]],
                 manager_new_id=existing_managers[r["manager_name"]],
                 quantity=r["quantity"],
                 total_price=r["total"],
+                status=new_status,
                 load_id=load_id
             ))
 
-        db.session.commit()
 
-        # === CLEAN FACT DUPLICATES ===
-        db.session.execute(text("""
-            DELETE FROM fact_sales a
-            USING fact_sales b
-            WHERE a.sale_id > b.sale_id
-            AND a.product_new_id = b.product_new_id
-            AND a.customer_new_id = b.customer_new_id
-            AND a.manager_new_id = b.manager_new_id
-            AND a.quantity = b.quantity
-            AND a.total_price = b.total_price;
-        """))
+        # db.session.commit()
+
+        # # === CLEAN FACT DUPLICATES (leave latest version per order) ===
+        # db.session.execute(text("""
+        #     DELETE FROM fact_sales a
+        #     USING fact_sales b
+        #     WHERE a.sale_id < b.sale_id
+        #     AND a.order_id = b.order_id;
+        # """))
+
 
         
         db.session.commit()
@@ -186,6 +207,7 @@ def etl_load():
         })
 
     except Exception as e:
+        app.logger.info(f"HUI: {str(e)}")
         return jsonify({"error": str(e)}), 500
 
 # --------------------------

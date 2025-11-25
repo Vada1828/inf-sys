@@ -142,57 +142,39 @@ async function runWHQuery() {
 
 
 // ====== PRESET QUERIES (вставляют SQL в textarea и сразу запускают) ======
-
-function presetAvgOrder() {
+function whAvgOrder() {
     document.getElementById("wh-sql").value =
-        `SELECT AVG(total_price) AS avg_order_price FROM fact_sales;`;
-    runWHQuery();
+        "SELECT AVG(total_price) AS avg_order_price FROM fact_sales;";
 }
 
-function presetTotalQty() {
+function whTotalQty() {
     document.getElementById("wh-sql").value =
-        `SELECT SUM(quantity) AS total_quantity_sold FROM fact_sales;`;
-    runWHQuery();
+        "SELECT SUM(quantity) AS total_quantity_sold FROM fact_sales;";
 }
 
-function presetTop5() {
+function whTop5Managers() {
     document.getElementById("wh-sql").value =
-        `SELECT dp.product_name, SUM(fs.quantity) AS total_quantity
-         FROM fact_sales fs
-         JOIN dim_product dp ON fs.product_new_id = dp.product_new_id
-         GROUP BY dp.product_name
-         ORDER BY total_quantity DESC
-         LIMIT 5;`;
-    runWHQuery();
+`SELECT dm.manager_name, SUM(f.total_price) AS manager_total
+FROM fact_sales f
+JOIN dim_manager dm ON dm.manager_new_id = f.manager_new_id
+GROUP BY dm.manager_name
+ORDER BY manager_total DESC
+LIMIT 5;`;
 }
 
-function presetCancelled() {
+function whCancelled() {
     document.getElementById("wh-sql").value =
-        `SELECT COUNT(*) AS cancelled_orders
-         FROM fact_sales
-         WHERE total_price = 0;`;
-    runWHQuery();
+        "SELECT COUNT(*) AS cancelled_orders FROM fact_sales WHERE status = 'cancelled';";
 }
 
-function presetMaxOrder() {
+function whMaxOrder() {
     document.getElementById("wh-sql").value =
-        `SELECT sale_id, total_price
-         FROM fact_sales
-         ORDER BY total_price DESC
-         LIMIT 1;`;
-    runWHQuery();
+        "SELECT order_id, total_price FROM fact_sales ORDER BY total_price DESC LIMIT 1;";
 }
 
-function presetExpensive() {
+function whExpensiveOrders() {
     document.getElementById("wh-sql").value =
-        `SELECT COUNT(*) AS expensive_products
-         FROM dim_product
-         WHERE product_name IS NOT NULL
-         AND product_new_id IN (
-             SELECT product_new_id FROM fact_sales
-             WHERE total_price > 100
-         );`;
-    runWHQuery();
+        "SELECT COUNT(*) AS expensive_orders FROM fact_sales WHERE total_price > 1000;";
 }
 
 

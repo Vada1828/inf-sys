@@ -197,21 +197,30 @@ def etl_extract():
     result = db.session.execute(text("""
         SELECT 
             o.order_id,
-            c.first_name || ' ' || c.second_name AS customer_name,
-            m.first_name || ' ' || m.second_name AS manager_name,
-            p.product_name,
-            od.quantity,
-            p.price,
-            (od.quantity * p.price) AS total
+            CONCAT(m.first_name, ' ', m.second_name) AS manager_name,
+            CONCAT(c.first_name, ' ', c.second_name) AS customer_name,
+            SUM(od.quantity) AS quantity_sum,
+            SUM(od.quantity * p.price) AS total_sum,
+            o.status
         FROM orders o
-        JOIN customers c ON c.customer_id = o.customer_id
         JOIN managers m ON m.manager_id = o.manager_id
+        JOIN customers c ON c.customer_id = o.customer_id
         JOIN order_details od ON od.order_id = o.order_id
         JOIN products p ON p.product_id = od.product_id
+        GROUP BY o.order_id, m.first_name, m.second_name, c.first_name, c.second_name, o.status
     """)).fetchall()
 
-    keys = ["order_id","customer_name","manager_name","product_name","quantity","price","total"]
-    data = [dict(zip(keys, row)) for row in result]
+
+    data = []
+    for r in result:
+        data.append({
+            "order_id": r.order_id,
+            "manager_name": r.manager_name,
+            "customer_name": r.customer_name,
+            "quantity": r.quantity_sum,
+            "total": r.total_sum,
+            "status": r.status
+        })
 
     return jsonify({"data": data})
 
