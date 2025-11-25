@@ -7,3 +7,4 @@ sqlalchemy_schemadisplay
 graphviz
 faker
 Flask-Cors
+requests

@@ -1,31 +1,38 @@
-
-
-version: '3.8'
-
 services:
-  web:
-    build:
-      context: .
-    container_name: flask_app
-    ports:
-      - "5000:5000"
-    environment:
-      - SQLALCHEMY_DATABASE_URI=postgresql://vada:vada@db:5432/vada
-    depends_on:
-      - db
-    entrypoint: ["sh", "/app/entrypoint.sh"]
-
-  db:
+  tr_db:
     image: postgres:13
-    container_name: postgres_db
     environment:
+      POSTGRES_DB: transactional
       POSTGRES_USER: vada
       POSTGRES_PASSWORD: vada
-      POSTGRES_DB: vada
-    ports:
-      - "5432:5432"
+    ports: ["5432:5432"]
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - tr_data:/var/lib/postgresql/data
+
+  wh_db:
+    image: postgres:13
+    environment:
+      POSTGRES_DB: warehouse
+      POSTGRES_USER:  vada
+      POSTGRES_PASSWORD:  vada
+    ports: ["5433:5432"]
+    volumes:
+      - wh_data:/var/lib/postgresql/data
+
+  web:
+    build: .
+    container_name: flask_app
+    environment:
+      TR_DATABASE_URI: postgresql://vada:vada@tr_db:5432/transactional
+      WH_DATABASE_URI: postgresql://vada:vada@wh_db:5432/warehouse
+    depends_on:
+      - tr_db
+      - wh_db
+    ports:
+      - "5000:5000"
+      - "5001:5001"
+    entrypoint: ["sh", "/app/entrypoint.sh"]
 
 volumes:
-  postgres_data:
+  tr_data:
+  wh_data:

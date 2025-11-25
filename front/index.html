@@ -4,44 +4,50 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>DB Tables Viewer</title>
-<link rel="stylesheet" href="styles.css" />
+<style>
+    body { font-family: Arial; padding: 20px; }
+    table { border-collapse: collapse; margin-top: 15px; }
+    th, td { border: 1px solid #ccc; padding: 5px 10px; }
+</style>
 </head>
 <body>
 
-<h1>Database Tables Viewer</h1>
+<h1>Transactional DB</h1>
 
-<label for="tables">Select Table:</label>
-<select id="tables">
-  <option value="">-- select a table --</option>
+<select id="trSelect">
+    <option value="">-- select TR table --</option>
 </select>
 
-<div id="table-data"></div>
+<div id="trTableContainer"></div>
+
+<h3>Insert into TR</h3>
+
+<select id="trInsertTable">
+    <option value="">-- select table --</option>
+</select>
+
+<textarea id="trInsertData" rows="8" cols="60" placeholder='{"field": "value"}'></textarea>
+<br><br>
+<button id="trInsertBtn">Insert</button>
+
+<h3>Reset TR</h3>
+<button id="resetTR">Reset Transactional DB</button>
 
 
-<label for="sql-query">Enter SQL query:</label><br />
-<textarea id="sql-query" rows="4" cols="80"></textarea><br />
-<button id="run-query">Run Query</button>
-<div>
+<hr>
+<h1>Warehouse DB</h1>
 
-  <button data-sql="SELECT AVG(order_price) AS avg_order_price FROM orders;">
-    Середній чек
-  </button>
+<select id="whSelect">
+    <option value="">-- select WH table --</option>
+</select>
 
-  <button data-sql="SELECT SUM(od.quantity) AS total_quantity_sold FROM order_details od;">
-    Загальна кількість проданих товарів
-  </button>
+<div id="whTableContainer"></div>
 
-  <button data-sql="SELECT p.product_name, SUM(od.quantity) AS total_quantity FROM order_details od JOIN products p ON od.product_id = p.product_id GROUP BY p.product_name ORDER BY total_quantity DESC LIMIT 5;">
-    Топ 5 товарів за кількістю продажів
-  </button>
-</div>
+<button id="loadWarehouse">Run ETL</button>
+<button id="resetWH">Reset Warehouse</button>
 
-<textarea id="sql-query" rows="4" cols="80"></textarea>
-<button id="run-query">Run Query</button>
-<div id="sql-result"></div>
-<div id="sql-result"></div>
+<pre id="output" style="margin-top:20px; background:#f0f0f0; padding:10px;"></pre>
 
 <script src="script.js"></script>
-
 </body>
 </html>

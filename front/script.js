@@ -1,121 +1,122 @@
-const tablesSelect = document.getElementById("tables");
-const tableDataDiv = document.getElementById("table-data");
+// ===== helpers =====
+function renderTable(containerId, data) {
+    const container = document.getElementById(containerId);
 
-const tables = {
-  orders: {},
-  customers: {},
-  "order-details": {},
-  managers: {},
-  products: {},
-};
-
-async function fetchAllTablesData() {
-  for (const tableName of Object.keys(tables)) {
-    const res = await fetch(`http://localhost:5000/${tableName}`);
-    if (res.ok) {
-      tables[tableName] = await res.json();
-      console.log(`Fetched ${tableName}:`, tables[tableName]);
-    } else {
-      console.error(`Error fetching ${tableName}:`, res.statusText);
+    if (!data || data.length === 0) {
+        container.innerHTML = "<p>No data</p>";
+        return;
     }
-  }
+
+    let html = "<table><tr>";
+    const keys = Object.keys(data[0]);
+    keys.forEach(k => html += `<th>${k}</th>`);
+    html += "</tr>";
+
+    data.forEach(row => {
+        html += "<tr>";
+        keys.forEach(k => html += `<td>${row[k]}</td>`);
+        html += "</tr>";
+    });
+    html += "</table>";
+
+    container.innerHTML = html;
 }
 
-fetchAllTablesData().finally(() => {
-  Object.keys(tables).forEach((tableName) => {
-    const option = document.createElement("option");
-    option.value = tableName;
-    option.textContent = tableName;
-    tablesSelect.appendChild(option);
-  });
-  tablesSelect.addEventListener("change", (e) => {
-    const selectedTable = e.target.value;
+function showOutput(data) {
+    document.getElementById("output").textContent =
+        JSON.stringify(data, null, 2);
+}
 
-    switch (selectedTable) {
-      case "orders":
-        displayTableData(tables["orders"]);
-        break;
-      case "customers":
-        displayTableData(tables["customers"]);
-        break;
-      case "order-details":
-        displayTableData(tables["order-details"]);
-        break;
-      case "managers":
-        displayTableData(tables["managers"]);
-        break;
-      case "products":
-        displayTableData(tables["products"]);
-        break;
-      default:
-        tableDataDiv.innerHTML = "<p>Select a table to display data.</p>";
-    }
-  });
+// ================= TRANSACTIONAL =================
+const TR_URL = "http://localhost:5000";
 
-  function displayTableData(data) {
-    if (!data || data.length === 0) {
-      tableDataDiv.innerHTML = "<p>No data available.</p>";
-      return;
-    }
-    const keys = Object.keys(data[0]);
-    let html =
-      "<table><thead><tr>" +
-      keys.map((k) => `<th>${k}</th>`).join("") +
-      "</tr></thead><tbody>";
-    data.forEach((row) => {
-      html += "<tr>" + keys.map((k) => `<td>${row[k]}</td>`).join("") + "</tr>";
+async function loadTRTables() {
+    const res = await fetch(`${TR_URL}/tr/tables`);
+    const tables = await res.json();
+
+    const sel = document.getElementById("trSelect");
+    const selInsert = document.getElementById("trInsertTable");
+
+    tables.forEach(t => {
+        sel.innerHTML += `<option value="${t}">${t}</option>`;
+        selInsert.innerHTML += `<option value="${t}">${t}</option>`;
     });
-    html += "</tbody></table>";
-    tableDataDiv.innerHTML = html;
-  }
-});
+}
 
-const sqlQueryInput = document.getElementById("sql-query");
-const runQueryBtn = document.getElementById("run-query");
-const sqlResultDiv = document.getElementById("sql-result");
-
-runQueryBtn.addEventListener("click", async () => {
-  const query = sqlQueryInput.value.trim();
-  if (!query) {
-    alert("Please enter an SQL query.");
-    return;
-  }
-  try {
-    const res = await fetch("http://localhost:5000/execute-sql", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ query }),
-    });
+document.getElementById("trSelect").onchange = async function () {
+    const table = this.value;
+    if (!table) return;
+    // console.log(`${TR_URL}/tr/${table}`);
+    const res = await fetch(`${TR_URL}/tr/rows/${table}`);
     const data = await res.json();
+    renderTable("trTableContainer", data);
+};
 
-    if (res.ok) {
-      if (Array.isArray(data) && data.length > 0) {
-        const keys = Object.keys(data[0]);
-        let html =
-          "<table><thead><tr>" +
-          keys.map((k) => `<th>${k}</th>`).join("") +
-          "</tr></thead><tbody>";
-        data.forEach((row) => {
-          html +=
-            "<tr>" + keys.map((k) => `<td>${row[k]}</td>`).join("") + "</tr>";
-        });
-        html += "</tbody></table>";
-        sqlResultDiv.innerHTML = html;
-      } else {
-        sqlResultDiv.innerHTML = "<p>No results returned.</p>";
-      }
-    } else {
-      sqlResultDiv.innerHTML = `<p>Error: ${data.error}</p>`;
+document.getElementById("trInsertBtn").onclick = async () => {
+    const table = document.getElementById("trInsertTable").value;
+    const txt = document.getElementById("trInsertData").value.trim();
+
+    if (!table) return alert("Select table");
+
+    let record;
+    try {
+        record = JSON.parse(txt);
+    } catch {
+        return alert("Invalid JSON");
     }
-  } catch (error) {
-    sqlResultDiv.innerHTML = `<p>Request failed: ${error}</p>`;
-  }
-});
 
-const sqlButtons = document.querySelectorAll("button[data-sql]");
+    const res = await fetch(`${TR_URL}/tr/rows/${table}`, {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify(record)
+    });
 
-sqlButtons.forEach((btn) => {
-  btn.addEventListener("click", () => {
-    sqlQueryInput.value = btn.getAttribute("data-sql");
-  });
-});
+    showOutput(await res.json());
+};
+
+document.getElementById("resetTR").onclick = async () => {
+    if (!confirm("Reset TR database?")) return;
+    const res = await fetch(`${TR_URL}/tr/reset`);
+    showOutput(await res.json());
+};
+
+// ================= WAREHOUSE =================
+const WH_URL = "http://localhost:5001";
+
+async function loadWHTables() {
+    const res = await fetch(`${WH_URL}/wh/tables`);
+    const tables = await res.json();
+
+    const sel = document.getElementById("whSelect");
+    tables.forEach(t => sel.innerHTML += `<option value="${t}">${t}</option>`);
+}
+
+document.getElementById("whSelect").onchange = async function () {
+    const table = this.value;
+    if (!table) return;
+
+    const res = await fetch(`${WH_URL}/wh/rows/${table}`);
+    const rows = await res.json();
+    renderTable("whTableContainer", rows);
+};
+
+document.getElementById("loadWarehouse").onclick = async () => {
+    const res = await fetch(`${WH_URL}/etl/load`);
+    showOutput(await res.json());
+
+    const table = document.getElementById("whSelect").value;
+    if (table) {
+        const r = await fetch(`${WH_URL}/wh/rows/${table}`);
+        renderTable("whTableContainer", await r.json());
+    }
+};
+
+document.getElementById("resetWH").onclick = async () => {
+    if (!confirm("Reset Warehouse DB?")) return;
+    const res = await fetch(`${WH_URL}/wh/reset`);
+    showOutput(await res.json());
+};
+
+// Init
+loadTRTables();
+loadWHTables();
