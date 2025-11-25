@@ -93,38 +93,56 @@ def wh_reset():
 @app.route("/etl/load")
 def etl_load():
     try:
-        extract = requests.get("http://web:5000/etl/extract").json()["data"]
+        extract = requests.get("http://localhost:5000/etl/extract").json()["data"]
 
-        # load_id
+        # получить новый load_id
         load_id = db.session.execute(text("SELECT COALESCE(MAX(load_id),0)+1 FROM fact_sales")).scalar()
 
-        # Clear
-        db.session.execute(text("TRUNCATE dim_product, dim_customer, dim_manager, fact_sales"))
+        # КЭШ для поиска существующих записей
+        existing_products = {
+            name: key for (key, name) in 
+            db.session.execute(text("SELECT product_key, product_name FROM dim_product")).all()
+        }
+        existing_customers = {
+            name: key for (key, name) in 
+            db.session.execute(text("SELECT customer_key, customer_name FROM dim_customer")).all()
+        }
+        existing_managers = {
+            name: key for (key, name) in 
+            db.session.execute(text("SELECT manager_key, manager_name FROM dim_manager")).all()
+        }
 
-        # Insert dimensions
-        seen_p, seen_c, seen_m = set(), set(), set()
-
+        # === вставляем новые записи в DIM ===
         for r in extract:
-            if r["product_name"] not in seen_p:
-                seen_p.add(r["product_name"])
-                db.session.add(DimProduct(product_id=None, product_name=r["product_name"], load_id=load_id))
+            # PRODUCT
+            if r["product_name"] not in existing_products:
+                new_p = DimProduct(product_name=r["product_name"], load_id=load_id)
+                db.session.add(new_p)
+                db.session.flush()
+                existing_products[r["product_name"]] = new_p.product_key
 
-            if r["customer_name"] not in seen_c:
-                seen_c.add(r["customer_name"])
-                db.session.add(DimCustomer(customer_id=None, customer_name=r["customer_name"], load_id=load_id))
+            # CUSTOMER
+            if r["customer_name"] not in existing_customers:
+                new_c = DimCustomer(customer_name=r["customer_name"], load_id=load_id)
+                db.session.add(new_c)
+                db.session.flush()
+                existing_customers[r["customer_name"]] = new_c.customer_key
 
-            if r["manager_name"] not in seen_m:
-                seen_m.add(r["manager_name"])
-                db.session.add(DimManager(manager_id=None, manager_name=r["manager_name"], load_id=load_id))
+            # MANAGER
+            if r["manager_name"] not in existing_managers:
+                new_m = DimManager(manager_name=r["manager_name"], load_id=load_id)
+                db.session.add(new_m)
+                db.session.flush()
+                existing_managers[r["manager_name"]] = new_m.manager_key
 
         db.session.commit()
 
-        # Insert facts
+        # === FACT SALES ===
         for r in extract:
             db.session.add(FactSales(
-                product_key=None,
-                customer_key=None,
-                manager_key=None,
+                product_key=existing_products[r["product_name"]],
+                customer_key=existing_customers[r["customer_name"]],
+                manager_key=existing_managers[r["manager_name"]],
                 quantity=r["quantity"],
                 total_price=r["total"],
                 load_id=load_id
@@ -136,7 +154,6 @@ def etl_load():
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-
 
 # --------------------------
 # SQL CONSOLE
